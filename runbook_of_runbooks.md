@@ -157,35 +157,25 @@ This fails the test: which host? What does 'bad' look like? Restart which servic
 
 ### 5.1 The idiot-proof checklist
 
-- [ ] **Goal is stated in one sentence** at the top ('After this, replica X is serving read traffic.').
-- [ ] **'When to use this' and 'When NOT to use this'** are both stated.
-- [ ] **Prerequisites are listed** with how to verify each: access, VPN, tools, permissions, credentials, approvals, change window.
-- [ ] **Every acronym and internal name is defined or linked** on first use.
-- [ ] **Every step is a single action** with a number. No step contains 'and then'.
-- [ ] **Exact hostnames, paths, URLs, and names** are given. No 'the database server'.
-- [ ] **Every command has expected output**, and says what to do for each outcome.
-- [ ] **Every step that can go wrong has a failure path** ('If you see X, do Y').
-- [ ] **Dangerous steps are flagged** with a warning, the blast radius, and how to undo.
-- [ ] **There is a verification section** that proves the task worked.
-- [ ] **There is a rollback section** (or an explicit statement that rollback is impossible).
-- [ ] **There is an escalation section** with who to contact, how, and when to give up.
-- [ ] **Estimated time** is stated so the reader knows whether they are stuck.
-- [ ] **Links are not broken** and point to the exact page, not a homepage.
-- [ ] **A person who did not write it has executed it** successfully (see section 7).
+- [ ] **Goal, when to use, when NOT to use:** one sentence each, with a link to the right runbook for the 'not' cases.
+- [ ] **Prerequisites:** each says how to verify it and what to do if it is missing (access, tools, permissions, approvals).
+- [ ] **One action per numbered step**, using exact hostnames, paths, and URLs. No 'the database server'.
+- [ ] **Every command shows expected output** and says what to do on success, error, or hang.
+- [ ] **Dangerous steps** carry a warning, the blast radius, and how to undo.
+- [ ] **Verification, rollback, escalation, and time estimate** are all present.
+- [ ] **Acronyms and internal names** are defined or linked on first use, and links go to the exact page.
+- [ ] **Someone other than the author** has run it successfully (see 7.2).
 
 ### 5.2 Writing style rules
 
-1. Use imperative sentences: 'Run the command', not 'You may want to run'.
-2. Use short sentences. One idea each.
-3. Never write 'obviously', 'simply', 'just', or 'as usual'. If it were obvious, it would not need a runbook.
-4. Put the **warning before** the dangerous step, not after.
-5. Use screenshots only for UI steps, and always add alt text and a text description. Screenshots go stale fast.
-6. Say what the screen/terminal should look like **before** the reader acts, so they can confirm they are in the right place.
-7. Write for a reader who is stressed and skimming. Bold the key action. Put the decision in the first line of each step.
+1. **Imperative, short sentences:** 'Run the command', one idea each.
+2. **No 'obviously', 'simply', 'just', or 'as usual'.** If it were obvious, it would not need a runbook.
+3. **Warning before the dangerous step**, never after.
+4. **Say what the reader should see before they act**, so they can confirm they are in the right place.
+5. **Screenshots only for UI steps**, always with alt text and a text description.
+6. **Skimmable:** decision first in each step, key action in bold.
 
-### 5.3 Warning format
-
-Use GitLab's alert blockquotes so warnings stand out:
+**Warning format (rule 3).** Use GitLab's alert blockquotes so warnings stand out:
 
 ```markdown
 > [!warning]
@@ -223,11 +213,13 @@ _Concrete triggers._
 _Situations where this is the wrong runbook, with a link to the right one._
 
 ## Prerequisites
-_Each with a verification command._
+_Everything needed before step 1. For each, say how to check it and what to do if it is missing._
 
-- [ ] Access to <system>. Verify: `<command>`
-- [ ] Tool <x> version <y> installed. Verify: `<command>`
-- [ ] Approval from <who>, if required.
+| Requirement | How to verify | If missing |
+|---|---|---|
+| Access to <system> | `<command>` | Request access: <link> |
+| Tool <x>, version <y> | `<command>` | Install: <link> |
+| Approval from <who>, if required | Link to the approval ticket | Ask <who> in <channel> |
 
 ## Variables
 _Everything the reader must fill in, defined once._
@@ -344,7 +336,7 @@ Always add the text version of the flow below the diagram, because diagrams are 
 3. **Create the page** in the GitLab wiki with the full path as the title, for example `runbooks/databases/postgres/add-read-replica`. A slash in a GitLab wiki page title creates the hierarchy.
 4. **Copy the matching template** from section 6 and fill it in.
 5. **Do the task yourself while writing.** Write each step as you perform it, copying real commands and real output. Never write a runbook from memory.
-6. **Link it** from the parent index page, and from the alert definition if it is an alert runbook (section 8).
+6. **Link it** from the parent index page, and from the alert definition if it is an alert runbook.
 7. **Have someone else test it** (next section) before you call it done.
 
 ### 7.2 Testing a runbook
@@ -390,51 +382,9 @@ cd your-project.wiki
 grep -rn 'add-read-replica' .
 ```
 
-## 8. Making Runbooks Findable During an Incident
+## 8. GitLab Wiki Specifics
 
-A runbook nobody can find does not exist.
-
-1. **Link every alert to its runbook.** In Prometheus alerting rules, use an annotation:
-
-```yaml
-groups:
-  - name: postgres
-    rules:
-      - alert: PostgresReplicationLagHigh
-        expr: pg_replication_lag_seconds > 5
-        for: 5m
-        labels:
-          severity: page
-        annotations:
-          summary: 'Replication lag on {{ $labels.instance }} is above 5s'
-          runbook_url: 'https://gitlab.example.com/your-group/your-project/-/wikis/runbooks/databases/postgres/alert-replication-lag-high'
-```
-
-2. **Make the alert notification show the link** (Slack/PagerDuty template includes `runbook_url`).
-3. **A top-level `Home` page** lists every area, and a `_sidebar.md` page provides navigation on every page.
-4. **Use consistent names** so search works: `alert-` prefix for alerts, exact alert name in the title.
-5. **Pin the most-used links** (on-call start page, escalation policy, status page) on the wiki Home page.
-
-An alert without a runbook link should be treated as a bug. You can enforce this in CI by checking rule files:
-
-```bash
-# Fails if any alert rule lacks a runbook_url
-for f in alerts/*.yaml; do
-  python3 - "$f" <<'PY'
-import sys, yaml
-rules = yaml.safe_load(open(sys.argv[1]))
-missing = [r['alert'] for g in rules['groups'] for r in g['rules']
-           if 'alert' in r and 'runbook_url' not in r.get('annotations', {})]
-if missing:
-    print(f'{sys.argv[1]}: missing runbook_url for {missing}')
-    sys.exit(1)
-PY
-done
-```
-
-## 9. GitLab Wiki Specifics
-
-### 9.1 How the wiki works
+### 8.1 How the wiki works
 
 - Each project's wiki is a **git repository** (`<project>.wiki.git`) containing Markdown files. You can edit in the web UI or clone it and work locally with your normal tools.
 - A page title with slashes (for example `runbooks/databases/postgres/failover-primary`) creates nested directories and a hierarchy in the sidebar.
@@ -442,7 +392,7 @@ done
 - Use relative links between pages so links survive renames of the project or group.
 - Use the wiki's built-in page templates feature if your GitLab version has it, and load the templates from section 6 into it.
 
-### 9.2 Working locally (recommended for big edits and for reviews)
+### 8.2 Working locally (recommended for big edits and for reviews)
 
 ```bash
 git clone git@gitlab.example.com:your-group/your-project.wiki.git
@@ -471,13 +421,13 @@ git push
 
 Reference the incident or ticket ID in the commit message so the reason for the change is traceable.
 
-### 9.3 Limits of the wiki (know them)
+### 8.3 Limits of the wiki (know them)
 
 - Wiki repositories do not go through merge requests by default. If you want peer review, agree a team rule: **high-risk runbooks are edited via a clone and reviewed by a second person before pushing**, or consider a separate docs repo with MR approvals that publishes to the wiki.
 - Search covers titles and content but is basic. Naming consistency matters more than usual.
 - There is no built-in 'stale page' reporting, so we create it ourselves (next section).
 
-### 9.4 Automated runbook linting
+### 8.4 Automated runbook linting
 
 Schedule this from a GitLab CI pipeline (for example, a weekly scheduled pipeline in an SRE tools project that clones the wiki). It enforces the standard so we do not rely on willpower.
 
@@ -556,40 +506,7 @@ lint-runbooks:
 
 Pipeline failures notify the team channel, giving us a weekly list of pages that need attention.
 
-## 10. Industry Background (What We Are Building On)
-
-- **Runbook vs. playbook vs. SOP.** The terms overlap and vary between organisations. A common distinction: a *runbook* is a step-by-step procedure for a specific task or alert; a *playbook* is a higher-level strategy for an entire scenario (for example, a major outage or security incident) that coordinates several runbooks and people; an *SOP* is a policy-level standard operating procedure, often for compliance. In our wiki, the index pages play the playbook role and the leaf pages are runbooks.
-- **Google SRE.** The SRE book describes on-call 'playbooks' attached to alerts and reports that having a playbook measurably improves time to mitigation compared to improvising. It also advocates Wheel of Misfortune exercises.
-- **Alert-linked documentation.** Every actionable alert should link to documentation describing what it means and what to do. PagerDuty, Atlassian, and the Prometheus community all recommend a `runbook_url` (or equivalent) on every alert.
-- **Symptom-based alerting.** Prefer alerts that describe user-visible symptoms. Cause-based alerts need diagnostic runbooks to explain which causes matter.
-- **Documentation types (Diataxis).** Good documentation separates tutorials, how-to guides, reference, and explanation. Our page types follow this: procedures are how-to guides, reference pages are reference, and the Background section carries explanation. Do not mix them in one page.
-- **Checklist thinking.** Aviation and surgery checklists show that short, tested, imperative checklists reduce errors in high-stress work (Gawande, *The Checklist Manifesto*). This is why our steps are numbered, atomic, and verified.
-- **Blameless postmortems.** Every incident review asks whether documentation helped, was missing, or was wrong, and creates action items to fix it. This is the single biggest driver of runbook quality.
-- **Common failure modes to avoid:** runbooks written from memory that skip 'obvious' steps; copy-pasted content that drifts; no owner; screenshots that rot; documentation that lives in a person's head or private notes; runbooks that only exist for the happy path; and wikis nobody reviews.
-
-## 11. Final Pre-Publish Checklist
-
-Paste this into your MR description or commit message and tick every box before announcing a new or changed runbook.
-
-```markdown
-- [ ] Page type chosen (index / procedure / alert / reference) and not mixed
-- [ ] Placed correctly in the hierarchy, linked from parent index, links back up
-- [ ] Under 10 steps and under ~300 lines; anything larger is split
-- [ ] Metadata table complete: owner, last reviewed, last tested, time, risk
-- [ ] Goal, when to use, when NOT to use
-- [ ] Prerequisites each have a verification command
-- [ ] Variables defined once at the top
-- [ ] Every command in a fenced code block with a language tag
-- [ ] Every command has expected output and a failure path
-- [ ] Dangerous steps have a warning, blast radius, and undo
-- [ ] Verification, rollback, and escalation sections present
-- [ ] No secrets, no ambiguous names, no undefined acronyms
-- [ ] Alert runbooks: linked from the alert's runbook_url
-- [ ] Cold-read tested by someone other than the author, and result recorded
-- [ ] Lint script passes
-```
-
-## 12. Quick Reference
+## 9. Quick Reference
 
 | I want to... | Do this |
 | --- | --- |
@@ -598,12 +515,11 @@ Paste this into your MR description or commit message and tick every box before 
 | Make my steps idiot-proof | Checklist in section 5.1 |
 | Test my runbook | Cold-read test, section 7.2 |
 | Fix something wrong I found | Edit it right now, update `Last reviewed` |
-| Link an alert to a runbook | Section 8 |
-| Check the wiki for stale pages | Lint script, section 9.4 |
+| Check the wiki for stale pages | Lint script, section 8.4 |
 
-## Related pages
-
-- Runbooks Home
-- On-call handbook
-- Incident response playbook
-- Postmortem template
+## Related pages 
+- **Suggestions**!
+    - Runbooks Home
+    - On-call handbook
+    - Incident response playbook
+    - Postmortem template
